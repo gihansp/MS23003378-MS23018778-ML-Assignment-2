@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mental Health Text Classifier</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Saira:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Saira', sans-serif;
+        }
+        .loader {
+            border: 5px solid #f3f3f3;
+            border-top: 5px solid #14b8a6;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="bg-teal-100 flex flex-col min-h-screen">
+    <header class="bg-gradient-to-r from-teal-700 to-teal-500 text-white py-4 px-6 shadow-md">
+        <div class="container mx-auto flex flex-col sm:flex-row justify-between items-center">
+            <h1 id="mental-health-classifier" class="text-3xl font-bold mb-2 sm:mb-0">Mental Health Text Classifier</h1>
+            <div class="text-center sm:text-right">
+                <p class="text-sm font-medium">
+                    Developed for Machine Learning - IT6080 module
+                </p>
+                <p class="text-sm mt-1">
+                    by <span class="font-semibold">Gihan Pathirage</span> (MS23003378) and
+                    <span class="font-semibold">M.K.C.P. Nishamali</span> (MS23018778)
+                </p>
+            </div>
+        </div>
+    </header>
+
+    <div class="container mx-auto p-8 bg-white rounded-lg shadow-lg max-w-2xl mt-10 flex-grow">
+        <div class="mb-6">
+            <label for="inputText" class="block text-sm font-medium text-teal-700 mb-2">Enter your text (max 280 characters):</label>
+            <textarea id="inputText" rows="4" class="shadow-sm focus:ring-teal-500 focus:border-teal-500 mt-1 block w-full sm:text-sm border-teal-300 rounded-md" maxlength="280"></textarea>
+            <div id="charCount" class="text-sm text-teal-600 mt-1">0 / 280</div>
+        </div>
+
+        <button id="classifyBtn" class="w-full py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-teal-600 hover:bg-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-teal-500">
+            Classify
+        </button>
+
+        <div id="loading" class="hidden mt-6 flex justify-center">
+            <div class="loader"></div>
+        </div>
+
+        <div id="result" class="hidden mt-6">
+            <h2 id="classification-result" class="text-xl font-semibold mb-4 text-center text-teal-700">Classification Result</h2>
+            <div id="prediction" class="text-lg text-center mb-4"></div>
+            <canvas id="probabilitiesChart" class="w-full h-64"></canvas>
+        </div>
+
+        <div id="error" class="hidden mt-6 text-red-600 text-center"></div>
+    </div>
+
+    <script>
+    $(document).ready(function() {
+        let chart = null;
+
+        $('#classifyBtn').click(function() {
+            var text = $('#inputText').val();
+            if (text.trim() === '') {
+                $('#error').text('Please enter some text to classify.').removeClass('hidden');
+                return;
+            }
+            $('#error').addClass('hidden');
+            $('#result').addClass('hidden');
+            $('#loading').removeClass('hidden');
+            $.ajax({
+                url: '/predict',
+                type: 'POST',
+                data: {text: text},
+                success: function(response) {
+                    $('#loading').addClass('hidden');
+                    if (response.error) {
+                        $('#error').text('Error: ' + response.error).removeClass('hidden');
+                    } else {
+                        $('#prediction').text('Prediction: ' + response.prediction);
+                        try {
+                            updateChart(response.probabilities);
+                            $('#result').removeClass('hidden');
+                        } catch (e) {
+                            $('#error').text('Error creating chart: ' + e.message).removeClass('hidden');
+                            console.error('Error creating chart:', e);
+                        }
+                    }
+                },
+                error: function(jqXHR, textStatus, errorThrown) {
+                    $('#loading').addClass('hidden');
+                    $('#error').text('An error occurred. Please try again.').removeClass('hidden');
+                    console.error('Error details:', jqXHR.responseText);
+                }
+            });
+        });
+
+        function updateChart(probabilities) {
+            const ctx = document.getElementById('probabilitiesChart').getContext('2d');
+
+            if (chart) {
+                chart.destroy();
+            }
+
+            const labels = Object.keys(probabilities);
+            const data = Object.values(probabilities).map(value => value * 100);
+
+            chart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Probability (%)',
+                        data: data,
+                        backgroundColor: 'rgba(20, 184, 166, 0.6)',
+                        borderColor: 'rgba(20, 184, 166, 1)',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            max: 100,
+                            title: {
+                                display: true,
+                                text: 'Probability (%)'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Classes'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+
+        $('#inputText').on('input', function() {
+            var charCount = $(this).val().length;
+            $('#charCount').text(charCount + ' / 280');
+        });
+    });
+    </script>
+</body>
+</html>
